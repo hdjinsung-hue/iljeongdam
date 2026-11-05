@@ -1,6 +1,7 @@
-import {id,localInput,validateEvent,parseText,parseCSV,parseICS,mergeEvents,makeICS} from './calendar.js';
+import {DocumentReader} from './recognition.js?v=2.0';
+import {id,localInput,validateEvent,parseText,parseCSV,parseICS,mergeEvents,makeICS} from './calendar.js?v=2.0';
 const $=s=>document.querySelector(s), key='iljeongdam.events.v1';
-let events=[],busy=false,generation=0,worker=null,pdfTask=null;
+let events=[],busy=false,generation=0,reader=null,lastFiles=[],lastGenerated='';
 const status=(message,error=false)=>{$('#status').textContent=message;$('#status').classList.toggle('error',error);};
 $('#base-year').value=new Date().getFullYear();
 function save(){try{localStorage.setItem(key,JSON.stringify(events));$('#save-state').textContent='확인 중인 일정은 이 브라우저에 자동 저장됩니다.';}catch{$('#save-state').textContent='자동 저장을 사용할 수 없습니다. 창을 닫기 전에 일정 파일을 다운로드해 주세요.';}}
@@ -11,24 +12,73 @@ function render(){const container=$('#events');container.replaceChildren();for(c
  input.addEventListener('input',()=>{if(field==='allDay'){e.allDay=input.checked;if(e.allDay){e.start=e.start.slice(0,10);e.end=e.end.slice(0,10);}else{e.start=e.start.slice(0,10)+'T09:00';e.end=e.end.slice(0,10)+'T10:00';}save();render();return;}e[field]=field==='selected'?input.checked:input.value;refreshError();save();update();});}
  card.querySelector('.delete-event').onclick=()=>{events=events.filter(x=>x.id!==e.id);save();render();};refreshError();container.append(card);}update();}
 function append(result){const merged=mergeEvents(events,result.events);if(merged.events.length>300)throw Error('한 번에 최대 300개 일정까지 관리할 수 있습니다.');events=merged.events;save();render();return merged.added;}
-function report(result,added){status(`${added}개 일정을 추가했습니다.${result.events.length>added?' 중복 일정은 제외했습니다.':''}${result.warnings.length?'\n확인 사항: '+result.warnings.slice(0,8).join(' / ')+(result.warnings.length>8?' 외 '+(result.warnings.length-8)+'건':''):''}`,!added);}
-$('#parse').onclick=()=>{try{if(!$('#source-text').value.trim())throw Error('사진·파일을 넣거나 일정 내용을 입력해 주세요.');const result=parseText($('#source-text').value,+$('#base-year').value);report(result,append(result));}catch(e){status(e.message,true);}};
+function report(result,added){if(!result.events.length){status('일정의 날짜와 제목을 연결하지 못했습니다. 달력 사진은 위에서 연월과 “달력 표”를 선택해 다시 읽어 주세요. 원본 Excel·Word 파일을 넣으면 더 정확하게 읽을 수 있습니다.'+(result.warnings.length?'\n확인 사항: '+[...new Set(result.warnings.map(w=>w.replace(/^\d+행: /,'')))].slice(0,4).join(' / '):''),true);return;}status(`${added}개 일정을 추가했습니다.${result.events.length>added?' 중복 일정은 제외했습니다.':''}${result.warnings.length?'\n확인 사항: '+result.warnings.slice(0,8).join(' / ')+(result.warnings.length>8?' 외 '+(result.warnings.length-8)+'건':''):''}`,!added);}
+$('#parse').onclick=()=>{try{if(!$('#source-text').value.trim())throw Error('사진·파일을 넣거나 일정 내용을 입력해 주세요.');const result=parseText($('#source-text').value,+$('#base-year').value,$('#calendar-month').value);report(result,append(result));}catch(e){status(e.message,true);}};
 $('#sample').onclick=()=>{$('#source-text').value=`${$('#base-year').value}-11-12 10:00~11:00 팀 주간회의\n${$('#base-year').value}-11-13 오후 2시 건강검진\n${$('#base-year').value}-11-15 가족 모임`;status('예시를 넣었습니다. “내용에서 일정 찾기”를 눌러보세요.');};
 $('#add').onclick=()=>{if(events.length>=300){status('일정은 최대 300개까지 추가할 수 있습니다.',true);return;}const d=new Date();d.setHours(9,0,0,0);const end=new Date(+d+3600000);events.push({id:id(),title:'',start:localInput(d),end:localInput(end),allDay:false,location:'',selected:true});save();render();$('#events').lastElementChild.querySelector('[data-field=title]').focus();};
 $('#select-all').onchange=()=>{events.forEach(e=>e.selected=$('#select-all').checked);save();render();};
-$('#clear').onclick=()=>{if((events.length||$('#source-text').value)&&confirm('모든 일정과 인식한 내용을 지울까요?')){events=[];$('#source-text').value='';$('#file-list').replaceChildren();save();render();status('모든 일정을 지웠습니다.');}};
+$('#clear').onclick=()=>{if((events.length||$('#source-text').value)&&confirm('모든 일정과 인식한 내용을 지울까요?')){events=[];lastFiles=[];lastGenerated='';$('#retry').disabled=true;$('#source-text').value='';$('#file-list').replaceChildren();save();render();status('모든 일정을 지웠습니다.');}};
 function exportFile(){return new File([makeICS(events.filter(e=>e.selected))],'일정담-'+localInput(new Date()).slice(0,10)+'.ics',{type:'text/calendar;charset=utf-8'});}
 $('#export').onclick=()=>{try{const file=exportFile(),url=URL.createObjectURL(file),a=document.createElement('a');a.href=url;a.download=file.name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);status('일정 파일을 다운로드했습니다. 캘린더 앱에서 열어 추가를 완료해 주세요.');}catch(e){status(e.message,true);}};
 try{$('#share').hidden=!navigator.canShare?.({files:[new File(['BEGIN:VCALENDAR\r\nEND:VCALENDAR'],'schedule.ics',{type:'text/calendar'})]});}catch{}
 $('#share').onclick=async()=>{try{await navigator.share({files:[exportFile()],title:'일정담 일정'});status('공유 화면을 닫았습니다. 캘린더 앱에서 추가 여부를 확인해 주세요.');}catch(e){if(e.name!=='AbortError')status('이 브라우저에서는 일정 공유를 지원하지 않습니다. 다운로드 버튼을 사용해 주세요.',true);}};
-function setBusy(value){busy=value;for(const name of ['files','camera','parse','sample','clear'])$('#'+name).disabled=value;$('#progress-box').hidden=!value;update();}
+function setBusy(value){
+ busy=value;for(const name of ['files','camera','parse','sample','clear','recognition-mode','calendar-month','week-start'])$('#'+name).disabled=value;
+ $('#retry').disabled=value||!lastFiles.length;$('#progress-box').hidden=!value;update();
+}
 function progress(message,value){$('#progress-label').textContent=message;$('#progress').value=value;}
-async function ocr(image,token){if(!window.Tesseract)throw Error('문자 인식 기능을 불러오지 못했습니다. 페이지를 새로고침해 주세요.');if(!worker){const created=await Tesseract.createWorker('kor+eng',1,{workerPath:new URL('./vendor/worker.min.js',import.meta.url).href,corePath:new URL('./vendor/tesseract-core-lstm.wasm.js',import.meta.url).href,langPath:new URL('./vendor/',import.meta.url).href,logger:m=>{if(token===generation)progress(m.status==='recognizing text'?'사진에서 일정을 읽는 중…':'문자 인식 엔진 준비 중…',Math.round((m.progress||0)*100));}});if(token!==generation){await created.terminate();throw Error('취소됨');}worker=created;}
- const result=await worker.recognize(image);return result.data.text;}
-async function imageText(file,token){const url=URL.createObjectURL(file);try{const img=new Image();img.src=url;await img.decode();if(img.naturalWidth*img.naturalHeight>50000000)throw Error('사진 해상도가 너무 큽니다. 가로 2,500px 정도로 줄여 주세요.');if(token!==generation)throw Error('취소됨');const scale=Math.min(1,2500/Math.max(img.naturalWidth,img.naturalHeight)),canvas=document.createElement('canvas');canvas.width=Math.round(img.naturalWidth*scale);canvas.height=Math.round(img.naturalHeight*scale);const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);return await ocr(canvas,token);}finally{URL.revokeObjectURL(url);}}
-async function pdfText(file,token){const pdfjs=await import('./vendor/pdf.mjs');pdfjs.GlobalWorkerOptions.workerSrc=new URL('./vendor/pdf.worker.mjs',import.meta.url).href;if(token!==generation)throw Error('취소됨');const task=pdfjs.getDocument({data:await file.arrayBuffer(),isEvalSupported:false});pdfTask=task;let doc;try{doc=await task.promise;if(doc.numPages>20)throw Error('PDF는 최대 20쪽까지 지원합니다. 파일을 나눠 주세요.');const texts=[];for(let n=1;n<=doc.numPages;n++){if(token!==generation)throw Error('취소됨');progress(`PDF ${n}/${doc.numPages}쪽 읽는 중…`,n/doc.numPages*100);const page=await doc.getPage(n),content=await page.getTextContent();let text='',lastY=null,lastX=null;for(const item of content.items){if(!('str'in item))continue;const y=item.transform[5],x=item.transform[4],height=Math.abs(item.transform[3])||10;if(lastY!==null&&Math.abs(y-lastY)>4){text+='\n';lastX=null;}if(lastX!==null&&x-lastX>height*.15&&!text.endsWith(' '))text+=' ';text+=item.str;if(item.hasEOL){text+='\n';lastX=null;}else lastX=x+item.width;lastY=y;}if(text.trim().length<5){const viewport=page.getViewport({scale:Math.min(2,2500/Math.max(page.view[2],page.view[3]))}),canvas=document.createElement('canvas');canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;text=await ocr(canvas,token);}texts.push(text.trim());}return texts.join('\n');}finally{await task.destroy();if(pdfTask===task)pdfTask=null;}}
-async function processFiles(files){if(busy)return;const token=++generation;setBusy(true);let errors=0;try{if(files.length>10)throw Error('한 번에 파일을 10개까지 선택해 주세요.');for(const file of files){if(token!==generation)break;const row=document.createElement('div');row.textContent=`${file.name} · 읽는 중`;$('#file-list').append(row);try{if(file.size>15*1024*1024)throw Error('15MB를 넘는 파일입니다.');if(!file.size)throw Error('빈 파일입니다.');let text;const ext=file.name.split('.').pop().toLowerCase();if(['jpg','jpeg','png','webp'].includes(ext))text=await imageText(file,token);else if(ext==='pdf')text=await pdfText(file,token);else if(['txt','csv','ics'].includes(ext)){text=await file.text();if(text.includes('\uFFFD'))throw Error('문자 인코딩을 읽지 못했습니다. UTF-8 형식으로 저장해 주세요.');}else throw Error('지원하지 않는 파일입니다. JPG·PNG·WEBP·PDF·TXT·CSV·ICS를 사용해 주세요.');if(token!==generation)break;if(text.length>200000)throw Error('파일의 텍스트가 너무 많습니다. 20만 자 이내로 나눠 주세요.');if(ext==='ics'||ext==='csv'){const result=ext==='ics'?parseICS(text):parseCSV(text);const added=append(result);row.textContent=`${file.name} · ${added}개 추가${result.warnings.length?' · '+result.warnings.join(' / '):''}`;}else{if(!text.trim())throw Error('읽을 수 있는 문자를 찾지 못했습니다. 선명한 사진으로 다시 시도해 주세요.');$('#source-text').value+=($('#source-text').value?'\n':'')+text.trim();row.textContent=`${file.name} · 문자 인식 완료`;}}catch(e){if(token!==generation)break;errors++;row.textContent=`${file.name} · ${e.message}`;}}if(token===generation)status(errors?`${errors}개 파일을 읽지 못했습니다. 위의 파일별 안내를 확인해 주세요. 읽힌 내용은 “내용에서 일정 찾기”로 확인할 수 있습니다.`:'파일을 읽었습니다. 사진·PDF·텍스트는 내용을 확인하고 “내용에서 일정 찾기”를 눌러 주세요. CSV·ICS는 일정 목록에 바로 추가했습니다.',!!errors);}catch(e){status(e.message,true);}finally{if(token===generation){await worker?.terminate();worker=null;setBusy(false);}}}
-$('#files').onchange=e=>{processFiles([...e.target.files]);e.target.value='';};$('#camera').onchange=e=>{processFiles([...e.target.files]);e.target.value='';};
-$('#cancel').onclick=async()=>{generation++;const current=worker,currentPDF=pdfTask;worker=null;pdfTask=null;try{await current?.terminate();await currentPDF?.destroy();}catch{}status('인식을 취소했습니다. 이미 읽은 내용과 일정은 유지됩니다.');setBusy(false);};
-const zone=$('#dropzone');for(const type of ['dragenter','dragover'])zone.addEventListener(type,e=>{e.preventDefault();zone.classList.add('dragging');});zone.addEventListener('dragleave',()=>zone.classList.remove('dragging'));zone.addEventListener('drop',e=>{e.preventDefault();zone.classList.remove('dragging');processFiles([...e.dataTransfer.files]);});
+function options(){return {month:$('#calendar-month').value,mode:$('#recognition-mode').value,weekStart:+$('#week-start').value};}
+async function processFiles(files){
+ if(busy||!files.length)return;
+ const token=++generation;lastFiles=files;setBusy(true);$('#file-list').replaceChildren();
+ const currentReader=new DocumentReader(options(),(message,value)=>{if(token===generation)progress(message,value);});reader=currentReader;
+ let errors=0,warnings=0,readCount=0,waitingForMonth=false;
+ const existing=$('#source-text').value===lastGenerated?'':$('#source-text').value;
+ const collected=[];
+ try{
+  if(files.length>10)throw Error('한 번에 파일을 10개까지 선택해 주세요.');
+  for(const file of files){
+   if(token!==generation)break;
+   const row=document.createElement('div');row.textContent=`${file.name} · 읽는 중`;
+   $('#file-list').append(row);
+   try{
+    if(file.size>15*1024*1024)throw Error('15MB를 넘는 파일입니다.');if(!file.size)throw Error('빈 파일입니다.');
+    const ext=file.name.split('.').pop().toLowerCase();
+    if(['txt','csv','ics'].includes(ext)){
+     const text=await file.text();if(token!==generation)break;
+     if(text.includes('\uFFFD'))throw Error('문자 인코딩을 읽지 못했습니다. UTF-8 형식으로 저장해 주세요.');
+     if(text.length>200000)throw Error('텍스트가 너무 많습니다. 20만 자 이내로 나눠 주세요.');
+     if(ext==='csv'||ext==='ics'){
+      const result=ext==='csv'?parseCSV(text):parseICS(text),added=append(result);
+      row.textContent=`${file.name} · ${added}개 추가${result.warnings.length?' · '+result.warnings.slice(0,5).join(' / '):''}`;warnings+=result.warnings.length;
+     }else{collected.push(text.trim());row.textContent=`${file.name} · 텍스트 읽기 완료`;}
+    }else{
+     const results=await currentReader.read(file);if(token!==generation)break;
+     const pieces=results.map(r=>r.text||r.raw).filter(Boolean);
+     if(!pieces.join('').trim())throw Error(results.flatMap(r=>r.warnings).join(' / ')||'읽을 수 있는 글자를 찾지 못했습니다. 원본 문서 또는 선명한 사진을 넣어 주세요.');
+     if(pieces.join('').length>200000)throw Error('추출한 내용이 너무 많습니다. 파일을 나눠 주세요.');
+     collected.push(...pieces);
+     const notices=results.flatMap(r=>r.warnings||[]);warnings+=notices.length;waitingForMonth||=results.some(r=>r.needsMonth);
+     row.textContent=`${file.name} · ${results.some(r=>r.calendar)?'달력 칸 분석':'내용 읽기'} 완료${notices.length?' · '+notices.slice(0,5).join(' / '):''}`;
+    }
+    readCount++;
+    if(collected.length){lastGenerated=[existing,...collected].filter(Boolean).join('\n');$('#source-text').value=lastGenerated;}
+   }catch(e){if(token!==generation)break;errors++;row.textContent=`${file.name} · ${e.message}`;}
+  }
+  if(token===generation){
+   if(waitingForMonth)status('달력의 연월이 필요합니다. 위에서 연월을 선택하고 “선택한 파일 다시 읽기”를 눌러 주세요. 날짜를 임의로 정하지 않았습니다.',true);
+   else if(errors)status(`${errors}개 파일을 읽지 못했습니다. 파일 이름 아래의 안내를 확인해 주세요.${readCount?' 읽힌 내용은 “내용에서 일정 찾기”로 확인할 수 있습니다.':''}`,true);
+   else status(`파일 읽기가 끝났습니다. 아래 내용을 확인한 뒤 “내용에서 일정 찾기”를 눌러 주세요.${warnings?' 파일별 확인 사항도 살펴봐 주세요.':''} CSV·ICS는 일정 목록에 바로 추가했습니다.`);
+  }
+ }catch(e){if(token===generation)status(e.message,true);}
+ finally{await currentReader.close();if(token===generation){reader=null;setBusy(false);}}
+}
+$('#files').onchange=e=>{processFiles([...e.target.files]);e.target.value='';};
+$('#camera').onchange=e=>{processFiles([...e.target.files]);e.target.value='';};
+$('#retry').onclick=()=>processFiles(lastFiles);
+$('#cancel').onclick=async()=>{generation++;const previous=reader;reader=null;await previous?.cancel();status('인식을 취소했습니다. 이미 읽은 내용과 일정은 유지됩니다.');setBusy(false);};
+const zone=$('#dropzone');
+for(const type of ['dragenter','dragover'])zone.addEventListener(type,e=>{e.preventDefault();zone.classList.add('dragging');});
+zone.addEventListener('dragleave',()=>zone.classList.remove('dragging'));
+zone.addEventListener('drop',e=>{e.preventDefault();zone.classList.remove('dragging');processFiles([...e.dataTransfer.files]);});
 render();

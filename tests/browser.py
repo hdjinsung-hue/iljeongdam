@@ -37,7 +37,7 @@ with sync_playwright() as p:
         assert '지원하지 않는' in page.locator('#file-list').inner_text()
         page.locator('#files').set_input_files({'name':'empty.txt','mimeType':'text/plain','buffer':b''});page.wait_for_function("!document.querySelector('#files').disabled")
         assert '빈 파일' in page.locator('#file-list').inner_text()
-    page.locator('#source-text').fill('2026-02-30 오류\n2026-11-12 25:00 오류');page.locator('#parse').click();assert '0개 일정을' in page.locator('#status').inner_text()
+    page.locator('#source-text').fill('2026-02-30 오류\n2026-11-12 25:00 오류');page.locator('#parse').click();assert '날짜와 제목을 연결하지 못했습니다' in page.locator('#status').inner_text();assert page.locator('.event-card').count()==4
     page.locator('#source-text').fill('2026-11-15 <img src=x onerror=alert(1)>');page.locator('#parse').click();assert page.locator('#events img').count()==0
     page.screenshot(path='/tmp/schedule-desktop.png',full_page=True)
     for width in [320,375,390,768,1280]:

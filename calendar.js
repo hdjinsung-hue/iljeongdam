@@ -11,19 +11,20 @@ export function validateEvent(e) {
 function day(y,m,d) { const s=`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`; return validDate(s)?s:null; }
 function signature(e) { return [e.title.trim(),e.start,e.end,e.allDay,e.location||''].join('|'); }
 export function mergeEvents(existing,incoming) { const seen=new Set(existing.map(signature)); const fresh=incoming.filter(e=>{const s=signature(e);if(seen.has(s))return false;seen.add(s);return true;});return {events:[...existing,...fresh],added:fresh.length}; }
-export function parseText(text,year=new Date().getFullYear()) {
+export function parseText(text,year=new Date().getFullYear(),month='') {
  const events=[],warnings=[];let currentDate=null;
  if(!Number.isInteger(+year)||year<1900||year>2100)throw Error('기준 연도는 1900~2100년으로 입력해 주세요.');
  const full=/(\d{4})\s*(?:[-./]|년)\s*(\d{1,2})\s*(?:[-./]|월)\s*(\d{1,2})\s*일?/;
  const short=/(\d{1,2})\s*(?:[-./]|월)\s*(\d{1,2})\s*일?/;
  for(const [index,raw] of text.split(/\r?\n/).entries()) {
-  let line=raw.trim();if(!line)continue;let matched=line.match(full),assumed=false;
+  let line=raw.trim().replace(/(\d)\s*[:：]\s*(\d{2})/g,'$1:$2').replace(/(\d)[‐‑–](?=\d)/g,'$1-');if(!line)continue;const heading=line.match(/^(\d{4})\s*년\s*(\d{1,2})\s*월\s*$/);if(heading){month=heading[1]+'-'+heading[2].padStart(2,'0');currentDate=null;continue;}let matched=line.match(full),assumed=false;
   if(!matched){matched=line.match(short);assumed=!!matched;}
   if(matched){const parsed=assumed?day(+year,+matched[1],+matched[2]):day(+matched[1],+matched[2],+matched[3]);
    if(!parsed){warnings.push(`${index+1}행: 존재하지 않는 날짜입니다.`);currentDate=null;continue;}currentDate=parsed;line=line.replace(matched[0],'').replace(/\([월화수목금토일](?:요일)?\)/g,'').trim();
    if(assumed)warnings.push(`${index+1}행: ${year}년을 적용했습니다.`);
   }
   if(!line)continue;
+  if(!matched&&/^(19\d{2}|20\d{2}|2100)-(0[1-9]|1[0-2])$/.test(month)){const dm=line.match(/^(\d{1,2})\s*일(?:\s|$)/);if(dm){const value=month+'-'+dm[1].padStart(2,'0');if(!validDate(value)){warnings.push(`${index+1}행: 존재하지 않는 날짜입니다.`);currentDate=null;continue;}currentDate=value;line=line.slice(dm[0].length).trim();warnings.push(`${index+1}행: ${month} 연월을 적용했습니다.`);if(!line)continue;}}
   if(!currentDate){warnings.push(`${index+1}행: 날짜를 찾지 못했습니다.`);continue;}
   const timeRE=/(오전|오후|AM|PM)?\s*(\d{1,2})(?::(\d{2})|시(?:\s*(\d{1,2})분?)?)(?:\s*(AM|PM))?/gi;
   const times=[...line.matchAll(timeRE)];let start=currentDate,end=currentDate,allDay=times.length===0;
