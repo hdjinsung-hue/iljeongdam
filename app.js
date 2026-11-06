@@ -1,6 +1,7 @@
-import {setupPhotoReview} from './photo-review.js?v=2.1';
-import {DocumentReader} from './recognition.js?v=2.1';
-import {id,localInput,validateEvent,parseText,parseCSV,parseICS,mergeEvents,makeICS} from './calendar.js?v=2.1';
+import {setupVoiceInput} from './voice-input.js?v=3.0';
+import {setupPhotoReview} from './photo-review.js?v=3.0';
+import {DocumentReader} from './recognition.js?v=3.0';
+import {id,localInput,validateEvent,parseText,parseCSV,parseICS,mergeEvents,makeICS,googleCalendarUrl} from './calendar.js?v=3.0';
 const $=s=>document.querySelector(s), key='iljeongdam.events.v1';
 let events=[],busy=false,generation=0,reader=null,lastFiles=[],lastGenerated='';
 const status=(message,error=false)=>{$('#status').textContent=message;$('#status').classList.toggle('error',error);};
@@ -8,7 +9,7 @@ $('#base-year').value=new Date().getFullYear();
 function save(){try{localStorage.setItem(key,JSON.stringify(events));$('#save-state').textContent='확인 중인 일정은 이 브라우저에 자동 저장됩니다.';}catch{$('#save-state').textContent='자동 저장을 사용할 수 없습니다. 창을 닫기 전에 일정 파일을 다운로드해 주세요.';}}
 try{const saved=JSON.parse(localStorage.getItem(key)||'[]');if(Array.isArray(saved))events=saved.filter(e=>e&&typeof e.id==='string'&&typeof e.title==='string'&&typeof e.start==='string'&&typeof e.end==='string'&&typeof e.allDay==='boolean').slice(0,300).map(e=>({...e,selected:e.selected!==false,location:typeof e.location==='string'?e.location:''}));}catch{status('저장된 일정을 읽지 못했습니다. 파일을 다시 가져와 주세요.',true);}
 function update(){const selected=events.filter(e=>e.selected);$('#count').textContent=`${events.length}개`;$('#selected-count').textContent=`선택한 일정 ${selected.length}개`;$('#empty').hidden=events.length>0;$('#export').disabled=busy||!selected.length||selected.some(validateEvent);$('#share').disabled=$('#export').disabled;$('#select-all').disabled=!events.length;$('#select-all').checked=events.length>0&&selected.length===events.length;$('#select-all').indeterminate=selected.length>0&&selected.length<events.length;}
-function render(){const container=$('#events');container.replaceChildren();for(const e of events){const card=$('#event-template').content.firstElementChild.cloneNode(true);card.dataset.id=e.id;const refreshError=()=>{card.querySelector('.event-error').textContent=validateEvent(e);};
+function render(){const container=$('#events');container.replaceChildren();for(const e of events){const card=$('#event-template').content.firstElementChild.cloneNode(true);card.dataset.id=e.id;const calendarLink=document.createElement('a');calendarLink.className='calendar-open';calendarLink.textContent='Google 캘린더로 열기 ↗ (저장 확인 필요)';calendarLink.target='_blank';calendarLink.rel='noopener noreferrer';card.append(calendarLink);const refreshError=()=>{const error=validateEvent(e);card.querySelector('.event-error').textContent=error;calendarLink.hidden=!!error;if(!error)calendarLink.href=googleCalendarUrl(e);};
  for(const field of ['selected','title','allDay','start','end','location']){const input=card.querySelector(`[data-field="${field}"]`);if(field==='selected'||field==='allDay')input.checked=!!e[field];else input.value=e[field];if(field==='start'||field==='end'){input.type=e.allDay?'date':'datetime-local';input.value=e[field];}
  input.addEventListener('input',()=>{if(field==='allDay'){e.allDay=input.checked;if(e.allDay){e.start=e.start.slice(0,10);e.end=e.end.slice(0,10);}else{e.start=e.start.slice(0,10)+'T09:00';e.end=e.end.slice(0,10)+'T10:00';}save();render();return;}e[field]=field==='selected'?input.checked:input.value;refreshError();save();update();});}
  card.querySelector('.delete-event').onclick=()=>{events=events.filter(x=>x.id!==e.id);save();render();};refreshError();container.append(card);}update();}
@@ -85,3 +86,5 @@ zone.addEventListener('drop',e=>{e.preventDefault();zone.classList.remove('dragg
 render();
 
 setupPhotoReview(incoming=>append({events:incoming,warnings:[]}));
+
+setupVoiceInput(incoming=>append({events:incoming,warnings:[]}));

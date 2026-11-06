@@ -81,3 +81,11 @@ export function parseICS(text) {
  }catch(e){warnings.push(`${i+1}번째: ${e.message}`);}}
  return {events,warnings};
 }
+
+export function googleCalendarUrl(event){
+ const error=validateEvent(event);if(error)throw Error(error);
+ let dates;
+ if(event.allDay){const end=new Date(event.end+'T00:00');end.setDate(end.getDate()+1);dates=event.start.replaceAll('-','')+'/'+localInput(end).slice(0,10).replaceAll('-','');}
+ else dates=stamp(new Date(event.start))+'/'+stamp(new Date(event.end));
+ const url=new URL('https://calendar.google.com/calendar/render');url.searchParams.set('action','TEMPLATE');url.searchParams.set('text',event.title.trim());url.searchParams.set('dates',dates);if(event.location)url.searchParams.set('location',event.location);return url.href;
+}

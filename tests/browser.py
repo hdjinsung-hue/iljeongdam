@@ -12,14 +12,14 @@ with sync_playwright() as p:
     browser=p.chromium.launch(executable_path='/usr/bin/chromium',headless=True,args=['--no-sandbox'])
     context=browser.new_context(accept_downloads=True,timezone_id='Asia/Seoul')
     page=context.new_page(); errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
-    page.goto(url);page.locator('#sample').click();page.locator('#parse').click()
+    page.goto(url);page.locator('.file-tools>summary').click();page.locator('#sample').click();page.locator('#parse').click()
     assert page.locator('.event-card').count()==3
     page.locator('#parse').click();assert page.locator('.event-card').count()==3
     title=page.locator('[data-field=title]').first;title.fill('');assert page.locator('#export').is_disabled();title.fill('수정한 회의')
     with page.expect_download() as download: page.locator('#export').click()
     output=pathlib.Path(download.value.path()).read_text();assert 'BEGIN:VCALENDAR' in output and '수정한 회의' in output
     assert output.count('BEGIN:VEVENT')==3
-    page.reload();assert page.locator('.event-card').count()==3;assert page.locator('[data-field=title]').first.input_value()=='수정한 회의'
+    page.reload();page.locator('.file-tools>summary').click();assert page.locator('.event-card').count()==3;assert page.locator('[data-field=title]').first.input_value()=='수정한 회의'
     page.locator('#select-all').uncheck();assert page.locator('#export').is_disabled()
     page.locator('#select-all').check();page.locator('.delete-event').last.click();assert page.locator('.event-card').count()==2
     page.locator('#add').click();title=page.locator('[data-field=title]').last;title.fill('새 일정')

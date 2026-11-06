@@ -17,7 +17,7 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as p:
     path=pathlib.Path(tmp)/'calendar.png';image.save(path)
     browser=p.chromium.launch(executable_path='/usr/bin/chromium',headless=True,args=['--no-sandbox'])
     page=browser.new_page(viewport={'width':1280,'height':900});errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
-    page.goto(f'http://127.0.0.1:{server.server_port}/');page.locator('#photo-assist summary').click();page.locator('#photo-input').set_input_files(str(path));page.locator('#photo-canvas').wait_for(state='visible')
+    page.goto(f'http://127.0.0.1:{server.server_port}/');page.locator('.file-tools>summary').click();page.locator('#photo-assist summary').click();page.locator('#photo-input').set_input_files(str(path));page.locator('#photo-canvas').wait_for(state='visible')
     canvas=page.locator('#photo-canvas');box=canvas.bounding_box()
     for x,y in [(3,3),(box['width']-3,3),(box['width']-3,box['height']-3),(3,box['height']-3)]:canvas.click(position={'x':x,'y':y})
     page.locator('#photo-build').click();assert '연월' in page.locator('#photo-status').inner_text();assert page.locator('.photo-cell').count()==0

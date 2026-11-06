@@ -32,6 +32,7 @@ with tempfile.TemporaryDirectory() as tmp, sync_playwright() as p:
     context=browser.new_context(timezone_id='Asia/Seoul')
     page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page.goto(f'http://127.0.0.1:{server.server_port}/')
+    page.locator('.file-tools>summary').click()
     def upload(name,expected):
         page.locator('#source-text').fill('');page.locator('#files').set_input_files(str(tmp/name));page.wait_for_function("!document.querySelector('#files').disabled",timeout=180000)
         text=page.locator('#source-text').input_value();assert all(s in text for s in expected),(name,text,page.locator('#file-list').inner_text())

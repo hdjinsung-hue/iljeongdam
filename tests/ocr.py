@@ -17,6 +17,7 @@ with tempfile.TemporaryDirectory() as tmp, sync_playwright() as p:
     doc.pdf(path=str(pathlib.Path(tmp)/'scan.pdf'));doc.close()
     page=b.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
     page.goto(f'http://127.0.0.1:{server.server_port}/')
+    page.locator('.file-tools>summary').click()
     for name in ['schedule.png','scan.pdf','text.pdf']:
         page.locator('#source-text').fill('');page.locator('#files').set_input_files(str(pathlib.Path(tmp)/name))
         page.wait_for_function("!document.querySelector('#files').disabled",timeout=180000)

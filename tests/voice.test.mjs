@@ -1,0 +1,14 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {parseVoice,normalizeSpeech} from '../voice-parser.js';
+import {googleCalendarUrl} from '../calendar.js';
+const ref='2026-11-06';
+test('Relative spoken date, afternoon and title',()=>{const r=parseVoice('내일 오후 3시에 병원 예약',ref);assert.equal(r.events.length,1);assert.equal(r.events[0].start,'2026-11-07T15:00');assert.equal(r.events[0].title,'병원 예약');});
+test('Korean spoken numbers and half hour',()=>{const r=parseVoice('십일월 십이일 오전 열한시 반 팀 회의',ref);assert.equal(r.events[0].start,'2026-11-12T11:30');assert.equal(r.events[0].title,'팀 회의');assert.equal(normalizeSpeech('이천이십육년 십일월 이십일일'), '2026년 11월 21일');});
+test('Multiple dates, next week and explicit interval',()=>{const r=parseVoice('내일 오후 3시 병원 예약 그리고 다음 주 월요일 오전 10시부터 오전 11시까지 팀 회의',ref);assert.equal(r.events.length,2);assert.equal(r.events[0].title,'병원 예약');assert.equal(r.events[1].start,'2026-11-09T10:00');assert.equal(r.events[1].end,'2026-11-09T11:00');assert.equal(r.events[1].title,'팀 회의');});
+test('No fabricated date, invalid day, invalid clock and reversed interval',()=>{for(const text of ['오후 3시 병원 예약','2월 30일 회의','내일 25:00 회의','내일 오후 4시부터 오후 3시까지 회의'])assert.equal(parseVoice(text,ref).events.length,0,text);});
+test('Noon, midnight and date without time',()=>{assert.equal(parseVoice('오늘 오후 12시 점심',ref).events[0].start,'2026-11-06T12:00');assert.equal(parseVoice('내일 오전 12시 야간 점검',ref).events[0].start,'2026-11-07T00:00');assert.equal(parseVoice('모레 가족 모임',ref).events[0].allDay,true);});
+test('Ambiguous AM/PM is flagged and bare weekdays use upcoming day',()=>{assert.ok(parseVoice('내일 3시 회의',ref).warnings.some(s=>s.includes('오전')));assert.equal(parseVoice('월요일 오전 9시 회의',ref).events[0].start,'2026-11-09T09:00');});
+test('Voice requests remove calendar command wrappers',()=>{assert.equal(parseVoice('캘린더에 내일 오후 3시 병원 예약 추가해줘',ref).events[0].title,'병원 예약');});
+test('Google Calendar links encode title, UTC and exclusive all-day end',()=>{const event=parseVoice('내일 오후 3시 병원 예약',ref).events[0];const url=new URL(googleCalendarUrl(event));assert.equal(url.searchParams.get('action'),'TEMPLATE');assert.equal(url.searchParams.get('text'),'병원 예약');assert.ok(url.searchParams.get('dates').includes('/'));const all=new URL(googleCalendarUrl(parseVoice('내일 가족모임',ref).events[0]));assert.equal(all.searchParams.get('dates'),'20261107/20261108');});
+test('A weekday attached to an explicit date is checked rather than treated as another event',()=>{const r=parseVoice('11월 3일 화요일 오전 10시 회의',ref);assert.equal(r.events.length,1);assert.equal(r.events[0].start,'2026-11-03T10:00');assert.equal(parseVoice('11월 3일 월요일 오전 10시 회의',ref).events.length,0);});

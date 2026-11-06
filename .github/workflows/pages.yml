@@ -26,10 +26,11 @@ jobs:
           node tests/calendar.test.mjs
           node tests/layout.test.mjs
           node tests/photo-grid.test.mjs
+          node tests/voice.test.mjs
       - name: Prepare public files
         run: |
           mkdir -p /tmp/pages
-          cp index.html styles.css app.js calendar.js document-layout.js office-import.js recognition.js photo-grid.js photo-review.js icon.svg .nojekyll /tmp/pages/
+          cp index.html styles.css app.js calendar.js document-layout.js office-import.js recognition.js photo-grid.js photo-review.js voice-parser.js voice-input.js icon.svg .nojekyll /tmp/pages/
           cp -R vendor /tmp/pages/vendor
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
