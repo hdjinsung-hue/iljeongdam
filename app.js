@@ -1,5 +1,6 @@
-import {DocumentReader} from './recognition.js?v=2.0';
-import {id,localInput,validateEvent,parseText,parseCSV,parseICS,mergeEvents,makeICS} from './calendar.js?v=2.0';
+import {setupPhotoReview} from './photo-review.js?v=2.1';
+import {DocumentReader} from './recognition.js?v=2.1';
+import {id,localInput,validateEvent,parseText,parseCSV,parseICS,mergeEvents,makeICS} from './calendar.js?v=2.1';
 const $=s=>document.querySelector(s), key='iljeongdam.events.v1';
 let events=[],busy=false,generation=0,reader=null,lastFiles=[],lastGenerated='';
 const status=(message,error=false)=>{$('#status').textContent=message;$('#status').classList.toggle('error',error);};
@@ -82,3 +83,5 @@ for(const type of ['dragenter','dragover'])zone.addEventListener(type,e=>{e.prev
 zone.addEventListener('dragleave',()=>zone.classList.remove('dragging'));
 zone.addEventListener('drop',e=>{e.preventDefault();zone.classList.remove('dragging');processFiles([...e.dataTransfer.files]);});
 render();
+
+setupPhotoReview(incoming=>append({events:incoming,warnings:[]}));
