@@ -5,7 +5,7 @@ export function setupVoiceInput(onAdd){
  let recognition=null,listening=false,cancelled=false,hadError=false,base='',finalText='';
  $('#voice-date').value=localInput(new Date()).slice(0,10);
  const status=(text,error=false)=>{$('#voice-status').textContent=text;$('#voice-status').classList.toggle('error',error);};
- const busy=value=>{listening=value;$('#voice-start').disabled=value||!Speech;$('#voice-stop').disabled=!value;$('#voice-cancel').disabled=!value;$('#voice-create').disabled=value;$('#voice-text').readOnly=value;$('#voice-sample').disabled=value;};
+ const busy=value=>{listening=value;$('#voice-start').disabled=value||!Speech;$('#voice-stop').disabled=!value;$('#voice-cancel').disabled=!value;$('#voice-create').disabled=value;$('#voice-text').readOnly=value;$('#voice-sample').disabled=value;document.dispatchEvent(new CustomEvent('voice-state',{detail:{listening:value,supported:!!Speech}}));};
  function build(){try{const value=$('#voice-text').value.trim();if(!value)throw Error('일정 내용을 말하거나 입력해 주세요.');const result=parseVoice(value,$('#voice-date').value);if(!result.events.length){status(result.warnings.join(' / '),true);return;}const count=onAdd(result.events);status(`${count}개 일정 초안을 만들었습니다. 오른쪽 목록에서 날짜·시간·제목을 확인하세요.${result.events.length>count?' 중복은 제외했습니다.':''}${result.warnings.length?'\n'+result.warnings.slice(0,5).join(' / '):''}`);}catch(e){status(e.message,true);}}
  if(!Speech)status('이 브라우저는 웹 음성 인식을 지원하지 않습니다. 아래 입력칸을 누르고 휴대폰 키보드의 마이크로 받아쓰기한 후 “말한 내용으로 일정 만들기”를 누르세요.');
  $('#voice-start').onclick=()=>{

@@ -30,6 +30,9 @@ with sync_playwright() as p:
     assert '마이크 권한' in page.locator('#voice-status').inner_text();assert page.locator('#voice-start').is_enabled()
     for width in [320,390,768,1280]:
         page.set_viewport_size({'width':width,'height':850});assert page.evaluate('document.documentElement.scrollWidth<=innerWidth'),width
+    page.set_viewport_size({'width':390,'height':844});page.locator('#mobile-mic').click();assert '완료' in page.locator('#mobile-mic').inner_text()
+    page.evaluate("const r=[{transcript:'내일 오전 11시 모바일 검증'}];r.isFinal=true;testSpeech.onresult({results:[r]});")
+    page.locator('#mobile-mic').click();assert page.locator('.event-card').count()==2
     unsupported=browser.new_context();unsupported.add_init_script('window.SpeechRecognition=undefined;window.webkitSpeechRecognition=undefined;')
     fallback=unsupported.new_page();fallback.goto(f'http://127.0.0.1:{server.server_port}/');assert fallback.locator('#voice-start').is_disabled();assert '키보드' in fallback.locator('#voice-status').inner_text()
     fallback.locator('#voice-date').fill('2026-11-06');fallback.locator('#voice-text').fill('내일 오전 10시 키보드 받아쓰기');fallback.locator('#voice-create').click();assert fallback.locator('.event-card').count()==1
